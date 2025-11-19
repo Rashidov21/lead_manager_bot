@@ -6,21 +6,31 @@ from datetime import datetime
 from loguru import logger
 
 from google_sheets import sheets_client
-from database import mark_reminder_sent, was_reminder_sent, update_lead_state
+from database import (
+    mark_reminder_sent,
+    was_reminder_sent,
+    update_lead_state,
+    get_seller_by_name,
+    get_all_admins,
+)
 from config import (
     STATUS_CALL1_NEEDED,
     STATUS_CALL1_DONE,
+    STATUS_CALL2_NEEDED,
     STATUS_CALL2_DONE,
+    STATUS_CALL3_NEEDED,
     STATUS_CALL3_DONE,
-    STATUS_FIRST_CLASS_PENDING,
-    STATUS_DID_NOT_ATTEND,
+    STATUS_FOLLOWUP_NEEDED,
+    STATUS_FIRST_CLASS_SCHEDULED,
+    REMINDER_CALL1_IMMEDIATE,
     REMINDER_CALL1_1H,
-    REMINDER_CALL1_2H,
+    REMINDER_CALL1_3H,
     REMINDER_CALL1_12H,
     REMINDER_CALL2_DELAY,
     REMINDER_CALL3_DELAY,
     REMINDER_FIRST_CLASS_24H,
     REMINDER_FIRST_CLASS_2H,
+    ADMIN_IDS,
 )
 from utils.time_utils import (
     now_utc,
@@ -39,6 +49,27 @@ class ReminderService:
 
     def __init__(self):
         pass
+
+    @staticmethod
+    def _lead_seller_name(lead: Dict) -> str:
+        return (
+            lead.get("Seller")
+            or lead.get("Sotuvchi")
+            or lead.get("seller")
+            or ""
+        ).strip()
+
+    async def _resolve_seller_contact(self, lead: Dict) -> Optional[int]:
+        seller_name = self._lead_seller_name(lead)
+        if not seller_name:
+            logger.warning(f"Lead {lead.get('ID')} sotuvchi nomisiz")
+            return None
+
+        seller = await get_seller_by_name(seller_name)
+        if not seller or not seller.get("telegram_id"):
+            logger.warning(f"{seller_name} uchun Telegram ID topilmadi")
+            return None
+        return seller["telegram_id"]
 
     async def process_all_leads(self, bot) -> List[Dict]:
         """
@@ -293,17 +324,9 @@ class ReminderService:
     # Message sending methods
     async def _send_call1_reminder(self, lead: Dict, bot, time_str: str, reminder_key: str):
         """Send Call #1 reminder to seller."""
-        from database import get_all_sellers
-
-        seller_name = lead.get("Seller", "")
-        sellers = await get_all_sellers()
-        seller = next((s for s in sellers if s.get("full_name") == seller_name or s.get("username") == seller_name), None)
-
-        if not seller:
-            logger.warning(f"Seller {seller_name} not found for reminder")
+        telegram_id = await self._resolve_seller_contact(lead)
+        if not telegram_id:
             return
-
-        telegram_id = seller["telegram_id"]
         lead_id = lead.get("ID", "")
         name = lead.get("Name", "")
         phone = lead.get("Phone", "")
@@ -350,16 +373,9 @@ class ReminderService:
 
     async def _send_call2_scheduled(self, lead: Dict, bot, call2_time: datetime):
         """Notify seller that Call #2 is scheduled."""
-        from database import get_all_sellers
-
-        seller_name = lead.get("Seller", "")
-        sellers = await get_all_sellers()
-        seller = next((s for s in sellers if s.get("full_name") == seller_name or s.get("username") == seller_name), None)
-
-        if not seller:
+        telegram_id = await self._resolve_seller_contact(lead)
+        if not telegram_id:
             return
-
-        telegram_id = seller["telegram_id"]
         lead_id = lead.get("ID", "")
         name = lead.get("Name", "")
 
@@ -376,16 +392,9 @@ class ReminderService:
 
     async def _send_call2_reminder(self, lead: Dict, bot, reminder_key: str):
         """Send Call #2 reminder."""
-        from database import get_all_sellers
-
-        seller_name = lead.get("Seller", "")
-        sellers = await get_all_sellers()
-        seller = next((s for s in sellers if s.get("full_name") == seller_name or s.get("username") == seller_name), None)
-
-        if not seller:
+        telegram_id = await self._resolve_seller_contact(lead)
+        if not telegram_id:
             return
-
-        telegram_id = seller["telegram_id"]
         lead_id = lead.get("ID", "")
         name = lead.get("Name", "")
         phone = lead.get("Phone", "")
@@ -403,16 +412,9 @@ class ReminderService:
 
     async def _send_call3_scheduled(self, lead: Dict, bot, call3_time: datetime):
         """Notify seller that Call #3 is scheduled."""
-        from database import get_all_sellers
-
-        seller_name = lead.get("Seller", "")
-        sellers = await get_all_sellers()
-        seller = next((s for s in sellers if s.get("full_name") == seller_name or s.get("username") == seller_name), None)
-
-        if not seller:
+        telegram_id = await self._resolve_seller_contact(lead)
+        if not telegram_id:
             return
-
-        telegram_id = seller["telegram_id"]
         lead_id = lead.get("ID", "")
         name = lead.get("Name", "")
 
@@ -429,16 +431,9 @@ class ReminderService:
 
     async def _send_call3_reminder(self, lead: Dict, bot, reminder_key: str):
         """Send Call #3 reminder."""
-        from database import get_all_sellers
-
-        seller_name = lead.get("Seller", "")
-        sellers = await get_all_sellers()
-        seller = next((s for s in sellers if s.get("full_name") == seller_name or s.get("username") == seller_name), None)
-
-        if not seller:
+        telegram_id = await self._resolve_seller_contact(lead)
+        if not telegram_id:
             return
-
-        telegram_id = seller["telegram_id"]
         lead_id = lead.get("ID", "")
         name = lead.get("Name", "")
         phone = lead.get("Phone", "")
@@ -456,16 +451,9 @@ class ReminderService:
 
     async def _send_first_class_reminder(self, lead: Dict, bot, time_str: str, reminder_key: str):
         """Send first class reminder."""
-        from database import get_all_sellers
-
-        seller_name = lead.get("Seller", "")
-        sellers = await get_all_sellers()
-        seller = next((s for s in sellers if s.get("full_name") == seller_name or s.get("username") == seller_name), None)
-
-        if not seller:
+        telegram_id = await self._resolve_seller_contact(lead)
+        if not telegram_id:
             return
-
-        telegram_id = seller["telegram_id"]
         lead_id = lead.get("ID", "")
         name = lead.get("Name", "")
         first_class_date = lead.get("First_Class_Date", "")
