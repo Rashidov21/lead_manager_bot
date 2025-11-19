@@ -90,7 +90,7 @@ A Telegram bot that works as a CRM automation and reminder system integrated wit
 
 3. **Seller Commands**
    - `/start` - Start the bot
-   - `/mylids` - View your leads
+   - `/myleads` - View your leads
    - `/pending` - View pending tasks
    - `/update_status` - Update lead status
    - `/help` - Show help

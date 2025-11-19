@@ -6,41 +6,48 @@ from aiogram import types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from loguru import logger
 
-from database import is_seller, get_user_role
+from database import (
+    is_seller,
+    get_seller_by_telegram,
+    get_seller_by_name,
+    link_seller_to_telegram,
+)
 from google_sheets import sheets_client
 from services.reminders import ReminderService
+from services.kpi import KPIService
 from config import (
     STATUS_CALL1_NEEDED,
     STATUS_CALL1_DONE,
+    STATUS_CALL2_NEEDED,
     STATUS_CALL2_DONE,
+    STATUS_CALL3_NEEDED,
     STATUS_CALL3_DONE,
-    STATUS_FIRST_CLASS_PENDING,
-    STATUS_DID_NOT_ATTEND,
-    STATUS_COMPLETED,
-    STATUS_LOST,
+    STATUS_FOLLOWUP_NEEDED,
+    STATUS_FOLLOWUP_DONE,
+    STATUS_FIRST_CLASS_SCHEDULED,
+    STATUS_FIRST_CLASS_CONFIRMED,
+    STATUS_NO_ANSWER,
+    STATUS_COLD_LEAD,
+    STATUS_LOST_LEAD,
     VALID_STATUSES,
 )
 from utils.time_utils import parse_datetime, format_datetime, now_utc, is_past
 
 
-async def mylids_handler(message: types.Message):
-    """Handle /mylids command - show seller's leads."""
+async def myleads_handler(message: types.Message):
+    """Handle /myleads command - show seller's leads."""
     user_id = message.from_user.id
 
     if not await is_seller(user_id):
         await message.answer("❌ Sizda bu buyruqni ishlatish uchun ruxsat yo'q.")
         return
 
-    # Get seller name from database
-    from database import get_all_sellers
-    sellers = await get_all_sellers()
-    seller_info = next((s for s in sellers if s["telegram_id"] == user_id), None)
-
+    seller_info = await get_seller_by_telegram(user_id)
     if not seller_info:
         await message.answer("❌ Sotuvchi ma'lumotlari topilmadi. Iltimos, admin bilan bog'laning.")
         return
 
-    seller_name = seller_info.get("full_name") or seller_info.get("username") or "Unknown"
+    seller_name = seller_info.get("seller_name") or "Unknown"
 
     try:
         leads = await sheets_client.get_leads_by_seller(seller_name)
@@ -73,7 +80,7 @@ async def mylids_handler(message: types.Message):
         await message.answer(text)
 
     except Exception as e:
-        logger.error(f"Error in mylids_handler: {e}")
+        logger.error(f"Error in myleads_handler: {e}")
         await message.answer("❌ Lidalarni olishda xatolik. Iltimos, keyinroq qayta urinib ko'ring.")
 
 
@@ -85,15 +92,12 @@ async def pending_handler(message: types.Message):
         await message.answer("❌ Sizda bu buyruqni ishlatish uchun ruxsat yo'q.")
         return
 
-    from database import get_all_sellers
-    sellers = await get_all_sellers()
-    seller_info = next((s for s in sellers if s["telegram_id"] == user_id), None)
-
+    seller_info = await get_seller_by_telegram(user_id)
     if not seller_info:
         await message.answer("❌ Sotuvchi ma'lumotlari topilmadi. Iltimos, admin bilan bog'laning.")
         return
 
-    seller_name = seller_info.get("full_name") or seller_info.get("username") or "Unknown"
+    seller_name = seller_info.get("seller_name") or "Unknown"
 
     try:
         leads = await sheets_client.get_leads_by_seller(seller_name)
@@ -104,20 +108,18 @@ async def pending_handler(message: types.Message):
             status = lead.get("Status", "")
             if status == STATUS_CALL1_NEEDED:
                 pending.append(("Qo'ng'iroq #1 Kerak", lead))
-            elif status == STATUS_CALL1_DONE:
-                # Check if Call #2 is due
+            elif status in (STATUS_CALL1_DONE, STATUS_CALL2_NEEDED):
                 call2_time = parse_datetime(lead.get("Call_2_Time", ""))
                 if call2_time and is_past(call2_time):
                     pending.append(("Qo'ng'iroq #2 Vaqti", lead))
-            elif status == STATUS_CALL2_DONE:
-                # Check if Call #3 is due
+            elif status in (STATUS_CALL2_DONE, STATUS_CALL3_NEEDED):
                 call3_time = parse_datetime(lead.get("Call_3_Time", ""))
                 if call3_time and is_past(call3_time):
                     pending.append(("Qo'ng'iroq #3 Vaqti", lead))
-            elif status == STATUS_FIRST_CLASS_PENDING:
-                pending.append(("Birinchi Dars Kutilmoqda", lead))
-            elif status == STATUS_DID_NOT_ATTEND:
-                pending.append(("Keyingi Qadam Kerak", lead))
+            elif status == STATUS_FIRST_CLASS_SCHEDULED:
+                pending.append(("1-dars Tasdiqlash Kerak", lead))
+            elif status == STATUS_FOLLOWUP_NEEDED:
+                pending.append(("Qayta aloqa vaqti", lead))
 
         if not pending:
             await message.answer("✅ Kutilayotgan vazifalar yo'q! Ajoyib ish!")
@@ -154,15 +156,12 @@ async def update_status_handler(message: types.Message):
         await message.answer("❌ Sizda bu buyruqni ishlatish uchun ruxsat yo'q.")
         return
 
-    from database import get_all_sellers
-    sellers = await get_all_sellers()
-    seller_info = next((s for s in sellers if s["telegram_id"] == user_id), None)
-
+    seller_info = await get_seller_by_telegram(user_id)
     if not seller_info:
         await message.answer("❌ Sotuvchi ma'lumotlari topilmadi. Iltimos, admin bilan bog'laning.")
         return
 
-    seller_name = seller_info.get("full_name") or seller_info.get("username") or "Unknown"
+    seller_name = seller_info.get("seller_name") or "Unknown"
 
     try:
         leads = await sheets_client.get_leads_by_seller(seller_name)
@@ -295,3 +294,113 @@ async def set_status_handler(callback: types.CallbackQuery):
         logger.error(f"Error in set_status_handler: {e}")
         await callback.answer("❌ Holatni yangilashda xatolik.", show_alert=True)
 
+
+async def followup_handler(message: types.Message):
+    """Handle /followup command to schedule follow-up."""
+    user_id = message.from_user.id
+
+    if not await is_seller(user_id):
+        await message.answer("❌ Sizda bu buyruqni ishlatish uchun ruxsat yo'q.")
+        return
+
+    seller_info = await get_seller_by_telegram(user_id)
+    if not seller_info:
+        await message.answer("❌ Avval /link_seller orqali o'zingizni ro'yxatdan o'tkazing.")
+        return
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("ℹ️ Foydalanish: /followup <LID_ID> <YYYY-MM-DD HH:MM> | ixtiyoriy izoh")
+        return
+
+    payload = parts[1].strip()
+    comment = ""
+    if "|" in payload:
+        schedule_text, comment = [chunk.strip() for chunk in payload.split("|", 1)]
+    else:
+        schedule_text = payload
+
+    tokens = schedule_text.split()
+    if len(tokens) < 2:
+        await message.answer("❌ Sana va vaqtni ko'rsating. Masalan: /followup LID123 2025-01-10 14:00")
+        return
+
+    lead_id = tokens[0]
+    datetime_str = " ".join(tokens[1:3]) if len(tokens) > 2 else tokens[1]
+    followup_dt = parse_datetime(datetime_str)
+
+    if not followup_dt:
+        await message.answer("❌ Sana va vaqtni aniqlab bo'lmadi. Iltimos, YYYY-MM-DD HH:MM formatida kiriting.")
+        return
+
+    updates = {
+        "Next_Followup": format_datetime(followup_dt),
+        "Status": STATUS_FOLLOWUP_NEEDED,
+    }
+    if comment:
+        updates["Comment"] = comment
+
+    success = await sheets_client.update_lead(lead_id, updates)
+    if success:
+        await message.answer(
+            f"✅ Qayta aloqa rejalashtirildi.\nLid: {lead_id}\nVaqt: {format_datetime(followup_dt)}"
+        )
+    else:
+        await message.answer("❌ Lid topilmadi yoki yangilab bo'lmadi.")
+
+
+async def kpi_handler(message: types.Message):
+    """Handle /kpi command - show seller's KPI snapshot."""
+    user_id = message.from_user.id
+
+    if not await is_seller(user_id):
+        await message.answer("❌ Sizda bu buyruqni ishlatish uchun ruxsat yo'q.")
+        return
+
+    seller_info = await get_seller_by_telegram(user_id)
+    if not seller_info:
+        await message.answer("❌ Avval /link_seller orqali o'zingizni ro'yxatdan o'tkazing.")
+        return
+
+    seller_name = seller_info.get("seller_name")
+    kpi_service = KPIService()
+    all_stats = await kpi_service.get_seller_stats()
+    seller_stats = all_stats.get(seller_name)
+
+    if not seller_stats:
+        await message.answer("ℹ️ Siz uchun KPI ma'lumotlari mavjud emas.")
+        return
+
+    text = (
+        f"<b>📊 {seller_name} KPI</b>\n\n"
+        f"Jami lidlar: {seller_stats.get('total_leads', 0)}\n"
+        f"Call #1 bajarilishi: {seller_stats.get('call1_completion_rate', 0):.1f}%\n"
+        f"Call #2 bajarilishi: {seller_stats.get('call2_completion_rate', 0):.1f}%\n"
+        f"Call #3 bajarilishi: {seller_stats.get('call3_completion_rate', 0):.1f}%\n"
+        f"1-dars qatnashishi: {seller_stats.get('first_class_attendance_rate', 0):.1f}%\n"
+        f"Konversiya: {seller_stats.get('conversion_rate', 0):.1f}%"
+    )
+    await message.answer(text)
+
+
+async def link_seller_handler(message: types.Message):
+    """Handle /link_seller command to attach Telegram user to seller name."""
+    user_id = message.from_user.id
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("ℹ️ Foydalanish: /link_seller <Sotuvchi nomi>")
+        return
+
+    seller_name = parts[1].strip()
+    if not seller_name:
+        await message.answer("❌ Sotuvchi nomini kiriting.")
+        return
+
+    seller_record = await get_seller_by_name(seller_name)
+    if not seller_record:
+        await message.answer("❌ Bunday sotuvchi topilmadi. Admin /add_seller bilan qo'shishi kerak.")
+        return
+
+    await link_seller_to_telegram(seller_name, user_id)
+    await message.answer(f"✅ {seller_name} profili Telegram hisobingizga bog'landi.")

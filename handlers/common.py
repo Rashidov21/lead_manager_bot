@@ -3,10 +3,21 @@ Common handlers for all users (start, help).
 """
 from aiogram import types
 from aiogram.filters import Command
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from loguru import logger
 
 from database import add_user, get_user_role, is_admin
 from config import ROLE_ADMIN, ROLE_SELLER
+
+
+SELLER_MENU_KEYBOARD = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="/myleads"), KeyboardButton(text="/pending")],
+        [KeyboardButton(text="/update_status"), KeyboardButton(text="/followup")],
+        [KeyboardButton(text="/kpi"), KeyboardButton(text="/help")],
+    ],
+    resize_keyboard=True,
+)
 
 
 async def start_handler(message: types.Message):
@@ -36,15 +47,19 @@ async def start_handler(message: types.Message):
 /settings - Bot sozlamalari
 
 <b>Sotuvchi Buyruqlari:</b>
-/mylids - Sizning lidingiz
+/myleads - Sizning lidingiz
 /pending - Kutilayotgan vazifalar
 /update_status - Lid holatini yangilash
+/followup - Qayta aloqa rejalashtirish
+/kpi - Shaxsiy KPI
 /help - Yordam"""
     else:
         welcome_text += """<b>Sotuvchi Buyruqlari:</b>
-/mylids - Sizning lidingiz
+/myleads - Sizning lidingiz
 /pending - Kutilayotgan vazifalar
 /update_status - Lid holatini yangilash
+/followup - Qayta aloqa rejalashtirish
+/kpi - Shaxsiy KPI
 /help - Yordam
 
 Sizga avtomatik eslatmalar yuboriladi:
@@ -52,7 +67,8 @@ Sizga avtomatik eslatmalar yuboriladi:
 • Keyingi qadamlar
 • Birinchi dars tasdiqlash"""
 
-    await message.answer(welcome_text)
+    reply_markup = SELLER_MENU_KEYBOARD if role == ROLE_SELLER else None
+    await message.answer(welcome_text, reply_markup=reply_markup)
     logger.info(f"User {user_id} started the bot")
 
 
@@ -69,35 +85,31 @@ async def help_handler(message: types.Message):
 /allstats - To'liq statistika
 /sellerstats - Har bir sotuvchi ishlashi
 /lazy - Kechiktirilgan vazifalar bilan sotuvchilar
+/settings - Bot va eslatma sozlamalari
+/add_seller <ism> [telegram_id] - yangi sotuvchini qo'shish
 
 <b>Sotuvchi Buyruqlari:</b>
-/mylids - Barcha lidingizni ko'rish
-/pending - Amal qilish kerak bo'lgan vazifalarni ko'rish
-/update_status - Lid holatini yangilash
-
-<b>Qanday ishlaydi:</b>
-• Lidlar Google Sheets'ga qo'shiladi
-• Bot avtomatik eslatmalar yuboradi
-• Boshqaruv paneli orqali ishlashni kuzatish"""
+/myleads, /pending, /update_status, /followup, /kpi, /link_seller"""
+        await message.answer(help_text)
     else:
         help_text = """<b>Sotuvchi Yordami</b>
 
-<b>Buyruqlar:</b>
-/mylids - Barcha lidingizni ko'rish
-/pending - Amal qilish kerak bo'lgan vazifalarni ko'rish
+<b>Asosiy tugmalar:</b>
+/myleads - Barcha lidingizni ko'rish
+/pending - Amal qilish kerak bo'lgan vazifalar
 /update_status - Lid holatini yangilash
+/followup - Qayta aloqa vaqtini belgilash
+/kpi - Shaxsiy ko'rsatkichlar
+/link_seller <ism> - Sotuvchi nomini Telegram bilan bog'lash
 
 <b>Eslatmalar:</b>
-Sizga avtomatik eslatmalar yuboriladi:
-• Qo'ng'iroq #1 (1 soat, 2 soat, 12 soat eskalatsiya)
-• Qo'ng'iroq #2 (Qo'ng'iroq #1 dan 2 soat keyin)
-• Qo'ng'iroq #3 (Qo'ng'iroq #2 dan 24 soat keyin)
-• Birinchi dars (24 soat va 2 soat oldin)
-• Keyingi qadamlar
+• Qo'ng'iroq #1: 0/1/3/12 soatlik ogohlantirishlar
+• Qo'ng'iroq #2: 2 soatdan keyin
+• Qo'ng'iroq #3: 24 soatdan keyin
+• Qayta aloqa va birinchi dars eslatmalari avtomatik yuboriladi.
 
 <b>Holatni yangilash:</b>
-Lid holatini o'zgartirish uchun /update_status dan foydalaning.
-Bot avtomatik ravishda keyingi qadamlarni rejalashtiradi."""
+/update_status orqali tanlang, bot jadvalni Google Sheets bilan sinxronlaydi."""
 
-    await message.answer(help_text)
+        await message.answer(help_text, reply_markup=SELLER_MENU_KEYBOARD)
 

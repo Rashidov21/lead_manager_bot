@@ -41,9 +41,15 @@ class LeadManagerBot:
         self.dp.message.register(common.help_handler, lambda m: m.text and m.text.startswith("/help"))
 
         # Seller handlers
-        self.dp.message.register(seller.mylids_handler, lambda m: m.text and m.text.startswith("/mylids"))
+        self.dp.message.register(
+            seller.myleads_handler,
+            lambda m: m.text and (m.text.startswith("/myleads") or m.text.startswith("/mylids"))
+        )
         self.dp.message.register(seller.pending_handler, lambda m: m.text and m.text.startswith("/pending"))
         self.dp.message.register(seller.update_status_handler, lambda m: m.text and m.text.startswith("/update_status"))
+        self.dp.message.register(seller.followup_handler, lambda m: m.text and m.text.startswith("/followup"))
+        self.dp.message.register(seller.kpi_handler, lambda m: m.text and m.text.startswith("/kpi"))
+        self.dp.message.register(seller.link_seller_handler, lambda m: m.text and m.text.startswith("/link_seller"))
         self.dp.callback_query.register(seller.status_callback_handler)
 
         # Admin handlers
@@ -52,6 +58,7 @@ class LeadManagerBot:
         self.dp.message.register(admin.sellerstats_handler, lambda m: m.text and m.text.startswith("/sellerstats"))
         self.dp.message.register(admin.lazy_handler, lambda m: m.text and m.text.startswith("/lazy"))
         self.dp.message.register(admin.settings_handler, lambda m: m.text and m.text.startswith("/settings"))
+        self.dp.message.register(admin.add_seller_handler, lambda m: m.text and m.text.startswith("/add_seller"))
 
         logger.info("Bot handlers registered")
 

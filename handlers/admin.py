@@ -4,7 +4,7 @@ Admin handlers for dashboard, statistics, and monitoring.
 from aiogram import types
 from loguru import logger
 
-from database import is_admin
+from database import is_admin, add_seller_record
 from services.kpi import KPIService
 from google_sheets import sheets_client
 from config import STATUS_CALL1_NEEDED
@@ -227,4 +227,32 @@ async def settings_handler(message: types.Message):
     text += "\n<i>Sozlamalarni o'zgartirish uchun config.py yoki environment o'zgaruvchilarini o'zgartiring.</i>"
 
     await message.answer(text)
+
+
+async def add_seller_handler(message: types.Message):
+    """Handle /add_seller command - admins can register sellers."""
+    user_id = message.from_user.id
+
+    if not await is_admin(user_id):
+        await message.answer("❌ Sizda bu buyruqni ishlatish uchun ruxsat yo'q.")
+        return
+
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 2:
+        await message.answer("ℹ️ Foydalanish: /add_seller <Sotuvchi nomi> [telegram_id]")
+        return
+
+    seller_name = parts[1].strip()
+    telegram_id = None
+
+    if len(parts) == 3:
+        candidate = parts[2].strip()
+        if candidate.isdigit():
+            telegram_id = int(candidate)
+
+    await add_seller_record(seller_name, telegram_id=telegram_id)
+    if telegram_id:
+        await message.answer(f"✅ {seller_name} qo'shildi va Telegram ID {telegram_id} bilan bog'landi.")
+    else:
+        await message.answer(f"✅ {seller_name} qo'shildi. Sotuvchi /link_seller orqali o'zini bog'lashi mumkin.")
 
