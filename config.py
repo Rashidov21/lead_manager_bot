@@ -41,53 +41,68 @@ DATABASE_PATH = DATA_DIR / "database.db"
 # Polling Configuration
 SHEET_POLL_INTERVAL = int(os.getenv("SHEET_POLL_INTERVAL", 120))  # seconds (2 minutes default)
 
-# Reminder Configuration
-REMINDER_CALL1_1H = 3600  # 1 hour in seconds
-REMINDER_CALL1_2H = 7200  # 2 hours in seconds
-REMINDER_CALL1_12H = 43200  # 12 hours in seconds
+# Reminder Configuration (seconds)
+REMINDER_CALL1_IMMEDIATE = 0
+REMINDER_CALL1_1H = 3600
+REMINDER_CALL1_3H = 10800
+REMINDER_CALL1_12H = 43200
 REMINDER_CALL2_DELAY = 7200  # 2 hours after Call #1 Done
 REMINDER_CALL3_DELAY = 86400  # 24 hours after Call #2 Done
-REMINDER_FIRST_CLASS_24H = 86400  # 24 hours before first class
-REMINDER_FIRST_CLASS_2H = 7200  # 2 hours before first class
+REMINDER_FOLLOWUP_MARGIN = 0  # send exactly at planned time
+REMINDER_FIRST_CLASS_24H = 86400
+REMINDER_FIRST_CLASS_2H = 7200
 
-# Google Sheets Column Names
+# Google Sheets Column Names (Uzbek headers)
 COLUMNS = {
-    "ID": 0,
-    "Name": 1,
-    "Phone": 2,
-    "Seller": 3,
-    "Lead_Source": 4,
-    "Created_At": 5,
-    "Status": 6,
-    "Call_1_Time": 7,
-    "Call_2_Time": 8,
-    "Call_3_Time": 9,
-    "Next_Followup": 10,
-    "First_Class_Date": 11,
-    "First_Class_Confirm": 12,
-    "Comment": 13,
-    "Last_Update": 14,
+    "ROW_NUM": 0,  # Column "N" (optional)
+    "ID": 1,
+    "Name": 2,  # "Ism"
+    "Phone": 3,  # "Raqam"
+    "Seller": 4,  # "Sotuvchi"
+    "Lead_Source": 5,  # "Manba"
+    "Created_At": 6,  # "Sana"
+    "Status": 7,
+    "Call_1_Time": 8,  # "Call #1 Vaqti"
+    "Call_2_Time": 9,  # "Call #2 Vaqti"
+    "Call_3_Time": 10,  # "Call #3 Vaqti"
+    "Next_Followup": 11,  # "Qayta aloqa"
+    "First_Class_Date": 12,  # "1-dars kuni"
+    "First_Class_Confirm": 13,  # "1-dars tasdig'i"
+    "Comment": 14,  # "Izoh"
+    "Last_Update": 15,  # "Oxirgi o'zgarish"
 }
 
 # Lead Status Values
+STATUS_NEW_LEAD = "New Lead"
 STATUS_CALL1_NEEDED = "Call #1 Needed"
 STATUS_CALL1_DONE = "Call #1 Done"
+STATUS_CALL2_NEEDED = "Call #2 Needed"
 STATUS_CALL2_DONE = "Call #2 Done"
+STATUS_CALL3_NEEDED = "Call #3 Needed"
 STATUS_CALL3_DONE = "Call #3 Done"
-STATUS_FIRST_CLASS_PENDING = "First Class Pending Confirmation"
-STATUS_DID_NOT_ATTEND = "Did Not Attend First Class"
-STATUS_COMPLETED = "Completed"
-STATUS_LOST = "Lost"
+STATUS_FOLLOWUP_NEEDED = "Follow-up Needed"
+STATUS_FOLLOWUP_DONE = "Follow-up Done"
+STATUS_FIRST_CLASS_SCHEDULED = "First Class Scheduled"
+STATUS_FIRST_CLASS_CONFIRMED = "First Class Confirmed"
+STATUS_NO_ANSWER = "No Answer"
+STATUS_COLD_LEAD = "Cold Lead"
+STATUS_LOST_LEAD = "Lost Lead"
 
 VALID_STATUSES = [
+    STATUS_NEW_LEAD,
     STATUS_CALL1_NEEDED,
     STATUS_CALL1_DONE,
+    STATUS_CALL2_NEEDED,
     STATUS_CALL2_DONE,
+    STATUS_CALL3_NEEDED,
     STATUS_CALL3_DONE,
-    STATUS_FIRST_CLASS_PENDING,
-    STATUS_DID_NOT_ATTEND,
-    STATUS_COMPLETED,
-    STATUS_LOST,
+    STATUS_FOLLOWUP_NEEDED,
+    STATUS_FOLLOWUP_DONE,
+    STATUS_FIRST_CLASS_SCHEDULED,
+    STATUS_FIRST_CLASS_CONFIRMED,
+    STATUS_NO_ANSWER,
+    STATUS_COLD_LEAD,
+    STATUS_LOST_LEAD,
 ]
 
 # User Roles

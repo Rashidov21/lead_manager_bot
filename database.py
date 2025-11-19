@@ -24,6 +24,18 @@ async def init_database():
             )
         """)
 
+        # Sellers table (managed by admins)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS sellers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                seller_name TEXT NOT NULL UNIQUE,
+                telegram_id INTEGER,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
         # Reminders table (tracks sent reminders to prevent duplicates)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS reminders (
@@ -103,12 +115,88 @@ async def add_user(telegram_id: int, username: Optional[str], full_name: Optiona
 
 
 async def get_all_sellers() -> List[Dict]:
-    """Get all sellers from database."""
+    """Get all sellers from sellers table."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM users WHERE role = 'seller' OR role = 'admin'") as cursor:
+        async with db.execute("SELECT * FROM sellers WHERE is_active = 1") as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
+
+
+async def get_seller_by_name(seller_name: str) -> Optional[Dict]:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM sellers WHERE LOWER(seller_name) = LOWER(?)", (seller_name,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def get_seller_by_telegram(telegram_id: int) -> Optional[Dict]:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM sellers WHERE telegram_id = ?", (telegram_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def add_seller_record(seller_name: str, telegram_id: Optional[int] = None, is_active: bool = True):
+    """Create or reactivate a seller."""
+    from utils.time_utils import now_utc, format_datetime
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO sellers (seller_name, telegram_id, is_active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(seller_name) DO UPDATE SET
+                telegram_id=excluded.telegram_id,
+                is_active=excluded.is_active,
+                updated_at=excluded.updated_at
+            """,
+            (
+                seller_name.strip(),
+                telegram_id,
+                1 if is_active else 0,
+                format_datetime(now_utc()),
+                format_datetime(now_utc()),
+            ),
+        )
+        await db.commit()
+
+
+async def link_seller_to_telegram(seller_name: str, telegram_id: int):
+    """Attach a Telegram user to an existing seller."""
+    from utils.time_utils import now_utc, format_datetime
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            """
+            UPDATE sellers
+            SET telegram_id = ?, updated_at = ?, is_active = 1
+            WHERE LOWER(seller_name) = LOWER(?)
+            """,
+            (telegram_id, format_datetime(now_utc()), seller_name),
+        )
+        await db.commit()
+
+
+async def deactivate_seller(seller_name: str):
+    """Soft-deactivate seller."""
+    from utils.time_utils import now_utc, format_datetime
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            """
+            UPDATE sellers SET is_active = 0, updated_at = ?
+            WHERE LOWER(seller_name) = LOWER(?)
+            """,
+            (format_datetime(now_utc()), seller_name),
+        )
+        await db.commit()
 
 
 async def get_all_admins() -> List[Dict]:
