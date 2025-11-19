@@ -23,7 +23,7 @@ if not BOT_TOKEN:
 
 # Google Sheets Configuration
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
-GOOGLE_SHEET_NAME = os.getenv("GOOGLE_SHEET_NAME", "Лист1")
+GOOGLE_SHEET_NAME = os.getenv("GOOGLE_SHEET_NAME", "Leads")
 SERVICE_ACCOUNT_PATH = DATA_DIR / "service_account.json"
 
 if not GOOGLE_SHEET_ID:

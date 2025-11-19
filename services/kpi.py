@@ -8,15 +8,58 @@ from loguru import logger
 
 from google_sheets import sheets_client
 from config import (
+    STATUS_NEW_LEAD,
     STATUS_CALL1_NEEDED,
     STATUS_CALL1_DONE,
+    STATUS_CALL2_NEEDED,
     STATUS_CALL2_DONE,
+    STATUS_CALL3_NEEDED,
     STATUS_CALL3_DONE,
-    STATUS_FIRST_CLASS_PENDING,
-    STATUS_COMPLETED,
-    STATUS_LOST,
+    STATUS_FOLLOWUP_NEEDED,
+    STATUS_FOLLOWUP_DONE,
+    STATUS_FIRST_CLASS_SCHEDULED,
+    STATUS_FIRST_CLASS_CONFIRMED,
+    STATUS_NO_ANSWER,
+    STATUS_COLD_LEAD,
+    STATUS_LOST_LEAD,
 )
 from utils.time_utils import parse_datetime, now_utc, days_between
+
+CLOSED_STATUSES = {
+    STATUS_FIRST_CLASS_CONFIRMED,
+    STATUS_LOST_LEAD,
+    STATUS_COLD_LEAD,
+}
+
+CALL1_DONE_STATUSES = {
+    STATUS_CALL1_DONE,
+    STATUS_CALL2_NEEDED,
+    STATUS_CALL2_DONE,
+    STATUS_CALL3_NEEDED,
+    STATUS_CALL3_DONE,
+    STATUS_FOLLOWUP_NEEDED,
+    STATUS_FOLLOWUP_DONE,
+    STATUS_FIRST_CLASS_SCHEDULED,
+    STATUS_FIRST_CLASS_CONFIRMED,
+}
+
+CALL2_DONE_STATUSES = {
+    STATUS_CALL2_DONE,
+    STATUS_CALL3_NEEDED,
+    STATUS_CALL3_DONE,
+    STATUS_FOLLOWUP_NEEDED,
+    STATUS_FOLLOWUP_DONE,
+    STATUS_FIRST_CLASS_SCHEDULED,
+    STATUS_FIRST_CLASS_CONFIRMED,
+}
+
+CALL3_DONE_STATUSES = {
+    STATUS_CALL3_DONE,
+    STATUS_FOLLOWUP_NEEDED,
+    STATUS_FOLLOWUP_DONE,
+    STATUS_FIRST_CLASS_SCHEDULED,
+    STATUS_FIRST_CLASS_CONFIRMED,
+}
 
 
 class KPIService:
@@ -35,7 +78,7 @@ class KPIService:
 
             # Calculate metrics
             total_leads = len(leads)
-            active_leads = len([l for l in leads if l.get("Status") not in [STATUS_COMPLETED, STATUS_LOST]])
+            active_leads = len([l for l in leads if l.get("Status") not in CLOSED_STATUSES])
 
             # Overdue leads (Call #1 Needed for > 12h)
             overdue_leads = 0
@@ -100,11 +143,11 @@ class KPIService:
 
             # Calculate completion rates
             total = len(leads)
-            call1_done = len([l for l in leads if l.get("Status") in [STATUS_CALL1_DONE, STATUS_CALL2_DONE, STATUS_CALL3_DONE, STATUS_COMPLETED]])
-            call2_done = len([l for l in leads if l.get("Status") in [STATUS_CALL2_DONE, STATUS_CALL3_DONE, STATUS_COMPLETED]])
-            call3_done = len([l for l in leads if l.get("Status") in [STATUS_CALL3_DONE, STATUS_COMPLETED]])
-            first_class_attended = len([l for l in leads if l.get("Status") == STATUS_COMPLETED])
-            converted = len([l for l in leads if l.get("Status") == STATUS_COMPLETED])
+            call1_done = len([l for l in leads if l.get("Status") in CALL1_DONE_STATUSES])
+            call2_done = len([l for l in leads if l.get("Status") in CALL2_DONE_STATUSES])
+            call3_done = len([l for l in leads if l.get("Status") in CALL3_DONE_STATUSES])
+            first_class_attended = len([l for l in leads if l.get("Status") == STATUS_FIRST_CLASS_CONFIRMED])
+            converted = len([l for l in leads if l.get("Status") == STATUS_FIRST_CLASS_CONFIRMED])
 
             call1_rate = (call1_done / total * 100) if total > 0 else 0
             call2_rate = (call2_done / total * 100) if total > 0 else 0
@@ -158,14 +201,16 @@ class KPIService:
         try:
             leads = await sheets_client.get_all_leads()
 
-            seller_data = defaultdict(lambda: {
-                "total_leads": 0,
-                "call1_done": 0,
-                "call2_done": 0,
-                "call3_done": 0,
-                "first_class_attended": 0,
-                "converted": 0,
-            })
+            seller_data = defaultdict(
+                lambda: {
+                    "total_leads": 0,
+                    "call1_done": 0,
+                    "call2_done": 0,
+                    "call3_done": 0,
+                    "first_class_attended": 0,
+                    "converted": 0,
+                }
+            )
 
             for lead in leads:
                 seller_name = lead.get("Seller", "")
@@ -175,16 +220,16 @@ class KPIService:
                 status = lead.get("Status", "")
                 seller_data[seller_name]["total_leads"] += 1
 
-                if status in [STATUS_CALL1_DONE, STATUS_CALL2_DONE, STATUS_CALL3_DONE, STATUS_COMPLETED]:
+                if status in CALL1_DONE_STATUSES:
                     seller_data[seller_name]["call1_done"] += 1
 
-                if status in [STATUS_CALL2_DONE, STATUS_CALL3_DONE, STATUS_COMPLETED]:
+                if status in CALL2_DONE_STATUSES:
                     seller_data[seller_name]["call2_done"] += 1
 
-                if status in [STATUS_CALL3_DONE, STATUS_COMPLETED]:
+                if status in CALL3_DONE_STATUSES:
                     seller_data[seller_name]["call3_done"] += 1
 
-                if status == STATUS_COMPLETED:
+                if status == STATUS_FIRST_CLASS_CONFIRMED:
                     seller_data[seller_name]["first_class_attended"] += 1
                     seller_data[seller_name]["converted"] += 1
 

@@ -389,7 +389,7 @@ async def link_seller_handler(message: types.Message):
 
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer("ℹ️ Foydalanish: /link_seller <Sotuvchi nomi>")
+        await message.answer("Foydalanish: /link_seller Sotuvchi nomi")
         return
 
     seller_name = parts[1].strip()
