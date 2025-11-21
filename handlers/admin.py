@@ -237,9 +237,19 @@ async def add_seller_handler(message: types.Message):
         await message.answer("❌ Sizda bu buyruqni ishlatish uchun ruxsat yo'q.")
         return
 
-    parts = message.text.split(maxsplit=2)
+    # Parse: /add_seller <name> [telegram_id] or /add_seller <name> va <telegram_id>
+    parts = message.text.split()
+    
     if len(parts) < 2:
-        await message.answer("ℹ️ Foydalanish: /add_seller <Sotuvchi nomi> [telegram_id]")
+        await message.answer(
+            "ℹ️ <b>Foydalanish:</b>\n\n"
+            "<b>Variant 1:</b> /add_seller [Sotuvchi nomi]\n"
+            "Masalan: /add_seller Ahmad\n\n"
+            "<b>Variant 2:</b> /add_seller [Sotuvchi nomi] [telegram_id]\n"
+            "Masalan: /add_seller Ahmad 1234567890\n\n"
+            "<b>Variant 3:</b> /add_seller [Sotuvchi nomi] va [telegram_id]\n"
+            "Masalan: /add_seller Ahmad va 1234567890"
+        )
         return
 
     seller_name = parts[1].strip()
@@ -249,12 +259,22 @@ async def add_seller_handler(message: types.Message):
     
     telegram_id = None
 
-    if len(parts) == 3:
-        candidate = parts[2].strip()
-        if candidate.isdigit():
-            telegram_id = int(candidate)
+    # Check for "va" (and) separator or direct telegram_id
+    if len(parts) >= 3:
+        if len(parts) >= 4 and parts[2].lower() == "va":
+            # Format: /add_seller name va telegram_id
+            try:
+                telegram_id = int(parts[3].strip())
+            except (ValueError, IndexError):
+                await message.answer("⚠️ Noto'g'ri Telegram ID format. Raqam bo'lishi kerak.")
+                return
         else:
-            await message.answer("⚠️ Telegram ID raqam bo'lishi kerak. Sotuvchi qo'shildi, lekin Telegram ID bog'lanmadi.")
+            # Format: /add_seller name telegram_id
+            try:
+                telegram_id = int(parts[2].strip())
+            except ValueError:
+                await message.answer("⚠️ Telegram ID raqam bo'lishi kerak.")
+                return
     
     # Check if seller already exists
     from database import get_seller_by_name
@@ -263,7 +283,8 @@ async def add_seller_handler(message: types.Message):
         await message.answer(
             f"ℹ️ '{seller_name}' nomli sotuvchi allaqachon mavjud.\n\n"
             f"Telegram ID: {existing.get('telegram_id', 'Bog\'lanmagan')}\n"
-            f"Holat: {'Faol' if existing.get('is_active') else 'Nofaol'}"
+            f"Holat: {'Faol' if existing.get('is_active') else 'Nofaol'}\n\n"
+            f"Yangilash uchun /link_seller {seller_name} va [telegram_id] ishlating."
         )
         return
 
@@ -276,7 +297,8 @@ async def add_seller_handler(message: types.Message):
     if telegram_id:
         await message.answer(
             f"✅ <b>{seller_name}</b> qo'shildi va Telegram ID {telegram_id} bilan bog'landi.\n\n"
-            f"📋 Google Sheets'da {len(leads)} ta lid topildi."
+            f"📋 Google Sheets'da {len(leads)} ta lid topildi.\n\n"
+            f"✅ Sotuvchi endi botdan foydalanishi mumkin!"
         )
     else:
         await message.answer(

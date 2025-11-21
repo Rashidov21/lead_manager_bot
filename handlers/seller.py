@@ -397,12 +397,32 @@ async def link_seller_handler(message: types.Message):
     """Handle /link_seller command to attach Telegram user to seller name."""
     user_id = message.from_user.id
 
-    parts = message.text.split(maxsplit=1)
+    # Parse command: /link_seller <name> va <telegram_id>
+    # Or simpler: /link_seller <name>
+    parts = message.text.split()
+    
     if len(parts) < 2:
-        await message.answer("ℹ️ Foydalanish: /link_seller <Sotuvchi nomi>\n\nMasalan: /link_seller Ahmad")
+        await message.answer(
+            "ℹ️ <b>Foydalanish:</b>\n\n"
+            "<b>Variant 1:</b> /link_seller [Sotuvchi nomi]\n"
+            "Masalan: /link_seller Ahmad\n\n"
+            "<b>Variant 2:</b> /link_seller [Sotuvchi nomi] va [telegram_id]\n"
+            "Masalan: /link_seller Ahmad va 1234567890\n\n"
+            "<i>Eslatma: Agar telegram_id ko'rsatmasangiz, joriy hisobingiz bog'lanadi.</i>"
+        )
         return
 
     seller_name = parts[1].strip()
+    telegram_id_to_link = user_id  # Default to current user
+    
+    # Check if "va" (and) is present for telegram_id
+    if len(parts) >= 4 and parts[2].lower() == "va":
+        try:
+            telegram_id_to_link = int(parts[3].strip())
+        except ValueError:
+            await message.answer("❌ Noto'g'ri Telegram ID format. Raqam bo'lishi kerak.")
+            return
+
     if not seller_name:
         await message.answer("❌ Sotuvchi nomini kiriting.")
         return
@@ -417,20 +437,20 @@ async def link_seller_handler(message: types.Message):
         return
 
     # Check if this telegram_id is already linked to another seller
-    existing_seller = await get_seller_by_telegram(user_id)
+    existing_seller = await get_seller_by_telegram(telegram_id_to_link)
     if existing_seller and existing_seller.get("seller_name", "").lower() != seller_name.lower():
         await message.answer(
-            f"⚠️ Sizning Telegram hisobingiz allaqachon '{existing_seller.get('seller_name')}' "
+            f"⚠️ Telegram ID {telegram_id_to_link} allaqachon '{existing_seller.get('seller_name')}' "
             f"nomli sotuvchiga bog'langan.\n\n"
             f"Yangi sotuvchiga bog'lash uchun admin bilan bog'laning."
         )
         return
 
     # Link seller to telegram
-    success = await link_seller_to_telegram(seller_name, user_id)
+    success = await link_seller_to_telegram(seller_name, telegram_id_to_link)
     if success:
         # Verify the link worked
-        linked_seller = await get_seller_by_telegram(user_id)
+        linked_seller = await get_seller_by_telegram(telegram_id_to_link)
         if linked_seller:
             # Check how many leads this seller has
             from google_sheets import sheets_client
@@ -439,7 +459,7 @@ async def link_seller_handler(message: types.Message):
             message_text = (
                 f"✅ <b>Muvaffaqiyatli bog'landi!</b>\n\n"
                 f"Sotuvchi: <b>{seller_name}</b>\n"
-                f"Telegram ID: {user_id}\n\n"
+                f"Telegram ID: {telegram_id_to_link}\n\n"
             )
             
             if leads:
@@ -449,7 +469,7 @@ async def link_seller_handler(message: types.Message):
                 message_text += "📋 Hozircha sizga tayinlangan lidlar yo'q."
             
             await message.answer(message_text)
-            logger.info(f"Seller {seller_name} linked to Telegram ID {user_id}")
+            logger.info(f"Seller {seller_name} linked to Telegram ID {telegram_id_to_link}")
         else:
             await message.answer("❌ Bog'lanishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring.")
     else:

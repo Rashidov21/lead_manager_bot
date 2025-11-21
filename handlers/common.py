@@ -12,7 +12,7 @@ from config import ROLE_ADMIN, ROLE_SELLER
 
 SELLER_MENU_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📋 Mening Lidingiz"), KeyboardButton(text="⏰ Kutilayotgan Vazifalar")],
+        [KeyboardButton(text="📋 Mening Lidlarim"), KeyboardButton(text="⏰ Kutilayotgan Vazifalar")],
         [KeyboardButton(text="✏️ Holatni Yangilash"), KeyboardButton(text="📞 Qayta Aloqa")],
         [KeyboardButton(text="📊 Shaxsiy KPI"), KeyboardButton(text="ℹ️ Yordam")],
     ],
@@ -94,7 +94,7 @@ async def help_handler(message: types.Message):
             /sellerstats - Har bir sotuvchi ishlashi
             /lazy - Kechiktirilgan vazifalar bilan sotuvchilar
             /settings - Bot va eslatma sozlamalari
-            /add_seller <ism> [telegram_id] - yangi sotuvchini qo'shish
+            /add_seller [ism] va [telegram_id] - yangi sotuvchini qo'shish
 
             <b>Sotuvchi Buyruqlari:</b>
             /myleads, /pending, /update_status, /followup, /kpi, /link_seller"""

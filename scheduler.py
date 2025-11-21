@@ -9,6 +9,7 @@ from loguru import logger
 
 from config import SHEET_POLL_INTERVAL
 from services.reminders import ReminderService
+from services.lead_monitor import LeadMonitorService
 from database import save_scheduler_job, mark_job_completed
 
 
@@ -19,6 +20,7 @@ class SchedulerManager:
         self.bot = bot
         self.scheduler = AsyncIOScheduler()
         self.reminder_service = ReminderService()
+        self.lead_monitor = LeadMonitorService()
         self._running = False
 
     async def start(self):
@@ -26,7 +28,16 @@ class SchedulerManager:
         if self._running:
             return
 
-        # Schedule periodic lead processing
+        # Schedule periodic lead monitoring (new leads and status changes)
+        self.scheduler.add_job(
+            self._monitor_leads_job,
+            trigger=IntervalTrigger(seconds=SHEET_POLL_INTERVAL),
+            id="monitor_leads",
+            replace_existing=True,
+            max_instances=1,
+        )
+
+        # Schedule periodic lead processing (reminders)
         self.scheduler.add_job(
             self._process_leads_job,
             trigger=IntervalTrigger(seconds=SHEET_POLL_INTERVAL),
@@ -68,6 +79,21 @@ class SchedulerManager:
         self.scheduler.shutdown(wait=True)
         self._running = False
         logger.info("Scheduler stopped")
+
+    async def _monitor_leads_job(self):
+        """Periodic job to monitor for new leads and status changes."""
+        try:
+            logger.debug("Monitoring leads for changes...")
+            changes = await self.lead_monitor.process_all_changes(self.bot)
+
+            if changes["new_leads"] > 0 or changes["status_changes"] > 0:
+                logger.info(
+                    f"Detected {changes['new_leads']} new leads and "
+                    f"{changes['status_changes']} status changes"
+                )
+
+        except Exception as e:
+            logger.error(f"Error in monitor_leads_job: {e}")
 
     async def _process_leads_job(self):
         """Periodic job to process all leads and send reminders."""

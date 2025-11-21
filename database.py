@@ -72,6 +72,48 @@ async def init_database():
             )
         """)
 
+        # Admin users table (for web admin panel authentication)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS admin_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                full_name TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                last_login TEXT
+            )
+        """)
+
+        # System logs table (for tracking all actions)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS system_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                user_type TEXT NOT NULL,
+                user_id TEXT,
+                user_name TEXT,
+                action_type TEXT NOT NULL,
+                lead_id TEXT,
+                old_value TEXT,
+                new_value TEXT,
+                details TEXT
+            )
+        """)
+
+        # Google Sheet sync status table
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS sync_status (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sync_time TEXT NOT NULL,
+                status TEXT NOT NULL,
+                rows_count INTEGER,
+                new_leads_count INTEGER,
+                error_message TEXT
+            )
+        """)
+
         await db.commit()
         logger.info("Database initialized successfully")
 
@@ -312,4 +354,142 @@ async def mark_job_completed(job_id: str):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("UPDATE scheduler_jobs SET status = 'completed' WHERE job_id = ?", (job_id,))
         await db.commit()
+
+
+# Admin authentication functions
+async def create_admin_user(email: str, password_hash: str, full_name: Optional[str] = None) -> bool:
+    """Create a new admin user for web panel."""
+    from utils.time_utils import now_utc, format_datetime
+    
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute("""
+                INSERT INTO admin_users (email, password_hash, full_name, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, 1, ?, ?)
+            """, (email.lower(), password_hash, full_name, format_datetime(now_utc()), format_datetime(now_utc())))
+            await db.commit()
+            logger.info(f"Admin user created: {email}")
+            return True
+    except aiosqlite.IntegrityError:
+        logger.warning(f"Admin user already exists: {email}")
+        return False
+
+
+async def get_admin_user(email: str) -> Optional[Dict]:
+    """Get admin user by email."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM admin_users WHERE email = ? AND is_active = 1", (email.lower(),)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def update_admin_last_login(email: str):
+    """Update last login time for admin user."""
+    from utils.time_utils import now_utc, format_datetime
+    
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "UPDATE admin_users SET last_login = ? WHERE email = ?",
+            (format_datetime(now_utc()), email.lower())
+        )
+        await db.commit()
+
+
+# System logging functions
+async def log_action(
+    user_type: str,
+    user_id: Optional[str],
+    user_name: Optional[str],
+    action_type: str,
+    lead_id: Optional[str] = None,
+    old_value: Optional[str] = None,
+    new_value: Optional[str] = None,
+    details: Optional[str] = None
+):
+    """Log a system action."""
+    from utils.time_utils import now_utc, format_datetime
+    
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            INSERT INTO system_logs 
+            (timestamp, user_type, user_id, user_name, action_type, lead_id, old_value, new_value, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            format_datetime(now_utc()),
+            user_type,
+            user_id,
+            user_name,
+            action_type,
+            lead_id,
+            old_value,
+            new_value,
+            details
+        ))
+        await db.commit()
+
+
+async def get_system_logs(
+    limit: int = 100,
+    offset: int = 0,
+    action_type: Optional[str] = None,
+    user_type: Optional[str] = None,
+    lead_id: Optional[str] = None
+) -> List[Dict]:
+    """Get system logs with optional filters."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        query = "SELECT * FROM system_logs WHERE 1=1"
+        params = []
+        
+        if action_type:
+            query += " AND action_type = ?"
+            params.append(action_type)
+        
+        if user_type:
+            query += " AND user_type = ?"
+            params.append(user_type)
+        
+        if lead_id:
+            query += " AND lead_id = ?"
+            params.append(lead_id)
+        
+        query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        async with db.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+# Sync status functions
+async def save_sync_status(
+    status: str,
+    rows_count: Optional[int] = None,
+    new_leads_count: Optional[int] = None,
+    error_message: Optional[str] = None
+):
+    """Save Google Sheet sync status."""
+    from utils.time_utils import now_utc, format_datetime
+    
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            INSERT INTO sync_status (sync_time, status, rows_count, new_leads_count, error_message)
+            VALUES (?, ?, ?, ?, ?)
+        """, (format_datetime(now_utc()), status, rows_count, new_leads_count, error_message))
+        await db.commit()
+
+
+async def get_latest_sync_status() -> Optional[Dict]:
+    """Get the latest sync status."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM sync_status ORDER BY sync_time DESC LIMIT 1"
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
 

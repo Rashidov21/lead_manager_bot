@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Lead Manager Admin Panel{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    {% if request.url.path != "/admin/login" %}
+    <!-- Navigation -->
+    <nav class="bg-blue-600 text-white shadow-lg">
+        <div class="container mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-chart-line text-2xl"></i>
+                    <h1 class="text-xl font-bold">Lead Manager Admin</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm">{{ admin.full_name or admin.email }}</span>
+                    <a href="/admin/logout" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <div class="flex">
+        <aside class="w-64 bg-gray-800 text-white min-h-screen">
+            <nav class="mt-4">
+                <a href="/admin/dashboard" class="flex items-center px-4 py-3 hover:bg-gray-700 {% if 'dashboard' in request.url.path %}bg-gray-700{% endif %}">
+                    <i class="fas fa-tachometer-alt w-6"></i>
+                    <span class="ml-3">Dashboard</span>
+                </a>
+                <a href="/admin/agents" class="flex items-center px-4 py-3 hover:bg-gray-700 {% if 'agents' in request.url.path %}bg-gray-700{% endif %}">
+                    <i class="fas fa-users w-6"></i>
+                    <span class="ml-3">Sales Agents</span>
+                </a>
+                <a href="/admin/leads" class="flex items-center px-4 py-3 hover:bg-gray-700 {% if 'leads' in request.url.path %}bg-gray-700{% endif %}">
+                    <i class="fas fa-address-book w-6"></i>
+                    <span class="ml-3">Leads</span>
+                </a>
+                <a href="/admin/kpi" class="flex items-center px-4 py-3 hover:bg-gray-700 {% if 'kpi' in request.url.path %}bg-gray-700{% endif %}">
+                    <i class="fas fa-chart-bar w-6"></i>
+                    <span class="ml-3">KPI Reports</span>
+                </a>
+                <a href="/admin/logs" class="flex items-center px-4 py-3 hover:bg-gray-700 {% if 'logs' in request.url.path %}bg-gray-700{% endif %}">
+                    <i class="fas fa-list-alt w-6"></i>
+                    <span class="ml-3">System Logs</span>
+                </a>
+                <a href="/admin/sync" class="flex items-center px-4 py-3 hover:bg-gray-700 {% if 'sync' in request.url.path %}bg-gray-700{% endif %}">
+                    <i class="fas fa-sync w-6"></i>
+                    <span class="ml-3">Sync Status</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% else %}
+    {% block content %}{% endblock %}
+    {% endif %}
+
+    <script>
+        // Helper function to get CSRF token from cookie
+        function getCookie(name) {
+            let value = "; " + document.cookie;
+            let parts = value.split("; " + name + "=");
+            if (parts.length == 2) return parts.pop().split(";").shift();
+        }
+
+        // Helper function for API calls
+        async function apiCall(url, options = {}) {
+            const token = getCookie('access_token');
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                }
+            };
+            const response = await fetch(url, { ...defaultOptions, ...options });
+            if (response.status === 401) {
+                window.location.href = '/admin/login';
+                return null;
+            }
+            return response;
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+
