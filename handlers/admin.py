@@ -243,16 +243,45 @@ async def add_seller_handler(message: types.Message):
         return
 
     seller_name = parts[1].strip()
+    if not seller_name:
+        await message.answer("❌ Sotuvchi nomini kiriting.")
+        return
+    
     telegram_id = None
 
     if len(parts) == 3:
         candidate = parts[2].strip()
         if candidate.isdigit():
             telegram_id = int(candidate)
+        else:
+            await message.answer("⚠️ Telegram ID raqam bo'lishi kerak. Sotuvchi qo'shildi, lekin Telegram ID bog'lanmadi.")
+    
+    # Check if seller already exists
+    from database import get_seller_by_name
+    existing = await get_seller_by_name(seller_name)
+    if existing:
+        await message.answer(
+            f"ℹ️ '{seller_name}' nomli sotuvchi allaqachon mavjud.\n\n"
+            f"Telegram ID: {existing.get('telegram_id', 'Bog\'lanmagan')}\n"
+            f"Holat: {'Faol' if existing.get('is_active') else 'Nofaol'}"
+        )
+        return
 
     await add_seller_record(seller_name, telegram_id=telegram_id)
+    
+    # Verify and get lead count
+    from google_sheets import sheets_client
+    leads = await sheets_client.get_leads_by_seller(seller_name)
+    
     if telegram_id:
-        await message.answer(f"✅ {seller_name} qo'shildi va Telegram ID {telegram_id} bilan bog'landi.")
+        await message.answer(
+            f"✅ <b>{seller_name}</b> qo'shildi va Telegram ID {telegram_id} bilan bog'landi.\n\n"
+            f"📋 Google Sheets'da {len(leads)} ta lid topildi."
+        )
     else:
-        await message.answer(f"✅ {seller_name} qo'shildi. Sotuvchi /link_seller orqali o'zini bog'lashi mumkin.")
+        await message.answer(
+            f"✅ <b>{seller_name}</b> qo'shildi.\n\n"
+            f"📋 Google Sheets'da {len(leads)} ta lid topildi.\n\n"
+            f"Sotuvchi /link_seller {seller_name} buyrug'i orqali o'zini bog'lashi mumkin."
+        )
 
