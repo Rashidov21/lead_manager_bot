@@ -36,19 +36,56 @@ class LeadManagerBot:
 
     async def setup_handlers(self):
         """Register all bot handlers."""
-        # Common handlers (start, help)
-        self.dp.message.register(common.start_handler, lambda m: m.text and m.text.startswith("/start"))
-        self.dp.message.register(common.help_handler, lambda m: m.text and m.text.startswith("/help"))
+        # Common handlers (start, help) - support both commands and button text
+        self.dp.message.register(
+            common.start_handler, 
+            lambda m: m.text and m.text.startswith("/start")
+        )
+        self.dp.message.register(
+            common.help_handler, 
+            lambda m: m.text and (
+                m.text.startswith("/help") or 
+                "Yordam" in m.text
+            )
+        )
 
-        # Seller handlers
+        # Seller handlers - support both commands and button text
         self.dp.message.register(
             seller.myleads_handler,
-            lambda m: m.text and (m.text.startswith("/myleads") or m.text.startswith("/mylids"))
+            lambda m: m.text and (
+                m.text.startswith("/myleads") or 
+                m.text.startswith("/mylids") or
+                "Mening Lidingiz" in m.text
+            )
         )
-        self.dp.message.register(seller.pending_handler, lambda m: m.text and m.text.startswith("/pending"))
-        self.dp.message.register(seller.update_status_handler, lambda m: m.text and m.text.startswith("/update_status"))
-        self.dp.message.register(seller.followup_handler, lambda m: m.text and m.text.startswith("/followup"))
-        self.dp.message.register(seller.kpi_handler, lambda m: m.text and m.text.startswith("/kpi"))
+        self.dp.message.register(
+            seller.pending_handler, 
+            lambda m: m.text and (
+                m.text.startswith("/pending") or 
+                "Kutilayotgan Vazifalar" in m.text
+            )
+        )
+        self.dp.message.register(
+            seller.update_status_handler, 
+            lambda m: m.text and (
+                m.text.startswith("/update_status") or 
+                "Holatni Yangilash" in m.text
+            )
+        )
+        self.dp.message.register(
+            seller.followup_handler, 
+            lambda m: m.text and (
+                m.text.startswith("/followup") or 
+                "Qayta Aloqa" in m.text
+            )
+        )
+        self.dp.message.register(
+            seller.kpi_handler, 
+            lambda m: m.text and (
+                m.text.startswith("/kpi") or 
+                "Shaxsiy KPI" in m.text
+            )
+        )
         self.dp.message.register(seller.link_seller_handler, lambda m: m.text and m.text.startswith("/link_seller"))
         self.dp.callback_query.register(seller.status_callback_handler)
 

@@ -12,9 +12,9 @@ from config import ROLE_ADMIN, ROLE_SELLER
 
 SELLER_MENU_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="/myleads"), KeyboardButton(text="/pending")],
-        [KeyboardButton(text="/update_status"), KeyboardButton(text="/followup")],
-        [KeyboardButton(text="/kpi"), KeyboardButton(text="/help")],
+        [KeyboardButton(text="📋 Mening Lidingiz"), KeyboardButton(text="⏰ Kutilayotgan Vazifalar")],
+        [KeyboardButton(text="✏️ Holatni Yangilash"), KeyboardButton(text="📞 Qayta Aloqa")],
+        [KeyboardButton(text="📊 Shaxsiy KPI"), KeyboardButton(text="ℹ️ Yordam")],
     ],
     resize_keyboard=True,
 )
@@ -26,46 +26,55 @@ async def start_handler(message: types.Message):
     username = message.from_user.username
     full_name = message.from_user.full_name
 
-    # Add user to database (default role: seller)
+    # Check if user is admin from env file first
+    from config import ADMIN_IDS
+    is_env_admin = user_id in ADMIN_IDS
+    
+    # Get role from database
     role = await get_user_role(user_id)
-    if not role:
-        # Check if user is in admin list (would be set via environment or manually)
-        # For now, default to seller
+    
+    # If user is admin in env but not in DB, set as admin
+    if is_env_admin and role != ROLE_ADMIN:
+        await add_user(user_id, username, full_name, ROLE_ADMIN)
+        role = ROLE_ADMIN
+    elif not role:
+        # Default to seller if not found
         await add_user(user_id, username, full_name, ROLE_SELLER)
         role = ROLE_SELLER
     else:
+        # Update existing user info
         await add_user(user_id, username, full_name, role)
 
     welcome_text = f"👋 Xush kelibsiz, {full_name or username or 'Foydalanuvchi'}!\n\n"
 
     if role == ROLE_ADMIN:
         welcome_text += """<b>Admin Buyruqlari:</b>
-/dashboard - Asosiy ko'rsatkichlar bilan boshqaruv paneli
-/allstats - Barcha statistika
-/sellerstats - Sotuvchilar ishlashi
-/lazy - Kechiktirilgan vazifalar
-/settings - Bot sozlamalari
+            /dashboard - Asosiy ko'rsatkichlar bilan boshqaruv paneli
+            /allstats - Barcha statistika
+            /sellerstats - Sotuvchilar ishlashi
+            /lazy - Kechiktirilgan vazifalar
+            /settings - Bot sozlamalari
 
-<b>Sotuvchi Buyruqlari:</b>
-/myleads - Sizning lidingiz
-/pending - Kutilayotgan vazifalar
-/update_status - Lid holatini yangilash
-/followup - Qayta aloqa rejalashtirish
-/kpi - Shaxsiy KPI
-/help - Yordam"""
+            <b>Sotuvchi Buyruqlari:</b>
+            /myleads - Sizning lidingiz
+            /pending - Kutilayotgan vazifalar
+            /update_status - Lid holatini yangilash
+            /followup - Qayta aloqa rejalashtirish
+            /kpi - Shaxsiy KPI
+            /help - Yordam"""
     else:
         welcome_text += """<b>Sotuvchi Buyruqlari:</b>
-/myleads - Sizning lidingiz
-/pending - Kutilayotgan vazifalar
-/update_status - Lid holatini yangilash
-/followup - Qayta aloqa rejalashtirish
-/kpi - Shaxsiy KPI
-/help - Yordam
+            /myleads - Sizning lidingiz
+            /pending - Kutilayotgan vazifalar
+            /update_status - Lid holatini yangilash
+            /followup - Qayta aloqa rejalashtirish
+            /kpi - Shaxsiy KPI
+            /help - Yordam
 
-Sizga avtomatik eslatmalar yuboriladi:
-• Qo'ng'iroq #1, #2, #3
-• Keyingi qadamlar
-• Birinchi dars tasdiqlash"""
+            Sizga avtomatik eslatmalar yuboriladi:
+            • Qo'ng'iroq #1, #2, #3
+            • Keyingi qadamlar
+            • Birinchi dars tasdiqlash"""
 
     reply_markup = SELLER_MENU_KEYBOARD if role == ROLE_SELLER else None
     await message.answer(welcome_text, reply_markup=reply_markup)
@@ -79,37 +88,36 @@ async def help_handler(message: types.Message):
 
     if role == ROLE_ADMIN:
         help_text = """<b>Admin Yordami</b>
+            <b>Boshqaruv Paneli va Tahlil:</b>
+            /dashboard - Asosiy ko'rsatkichlar bilan umumiy ko'rinish
+            /allstats - To'liq statistika
+            /sellerstats - Har bir sotuvchi ishlashi
+            /lazy - Kechiktirilgan vazifalar bilan sotuvchilar
+            /settings - Bot va eslatma sozlamalari
+            /add_seller <ism> [telegram_id] - yangi sotuvchini qo'shish
 
-<b>Boshqaruv Paneli va Tahlil:</b>
-/dashboard - Asosiy ko'rsatkichlar bilan umumiy ko'rinish
-/allstats - To'liq statistika
-/sellerstats - Har bir sotuvchi ishlashi
-/lazy - Kechiktirilgan vazifalar bilan sotuvchilar
-/settings - Bot va eslatma sozlamalari
-/add_seller <ism> [telegram_id] - yangi sotuvchini qo'shish
-
-<b>Sotuvchi Buyruqlari:</b>
-/myleads, /pending, /update_status, /followup, /kpi, /link_seller"""
+            <b>Sotuvchi Buyruqlari:</b>
+            /myleads, /pending, /update_status, /followup, /kpi, /link_seller"""
         await message.answer(help_text)
     else:
         help_text = """<b>Sotuvchi Yordami</b>
 
-<b>Asosiy tugmalar:</b>
-/myleads - Barcha lidingizni ko'rish
-/pending - Amal qilish kerak bo'lgan vazifalar
-/update_status - Lid holatini yangilash
-/followup - Qayta aloqa vaqtini belgilash
-/kpi - Shaxsiy ko'rsatkichlar
-/link_seller <ism> - Sotuvchi nomini Telegram bilan bog'lash
+            <b>Asosiy tugmalar:</b>
+            /myleads - Barcha lidingizni ko'rish
+            /pending - Amal qilish kerak bo'lgan vazifalar
+            /update_status - Lid holatini yangilash
+            /followup - Qayta aloqa vaqtini belgilash
+            /kpi - Shaxsiy ko'rsatkichlar
+            /link_seller ism - Sotuvchi nomini Telegram bilan bog'lash
 
-<b>Eslatmalar:</b>
-• Qo'ng'iroq #1: 0/1/3/12 soatlik ogohlantirishlar
-• Qo'ng'iroq #2: 2 soatdan keyin
-• Qo'ng'iroq #3: 24 soatdan keyin
-• Qayta aloqa va birinchi dars eslatmalari avtomatik yuboriladi.
+            <b>Eslatmalar:</b>
+            • Qo'ng'iroq #1: 0/1/3/12 soatlik ogohlantirishlar
+            • Qo'ng'iroq #2: 2 soatdan keyin
+            • Qo'ng'iroq #3: 24 soatdan keyin
+            • Qayta aloqa va birinchi dars eslatmalari avtomatik yuboriladi.
 
-<b>Holatni yangilash:</b>
-/update_status orqali tanlang, bot jadvalni Google Sheets bilan sinxronlaydi."""
+            <b>Holatni yangilash:</b>
+            /update_status orqali tanlang, bot jadvalni Google Sheets bilan sinxronlaydi."""
 
         await message.answer(help_text, reply_markup=SELLER_MENU_KEYBOARD)
 

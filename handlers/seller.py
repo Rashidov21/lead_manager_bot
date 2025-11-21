@@ -35,7 +35,7 @@ from utils.time_utils import parse_datetime, format_datetime, now_utc, is_past
 
 
 async def myleads_handler(message: types.Message):
-    """Handle /myleads command - show seller's leads."""
+    """Handle /myleads command or 'Mening Lidingiz' button - show seller's leads."""
     user_id = message.from_user.id
 
     if not await is_seller(user_id):
@@ -44,7 +44,10 @@ async def myleads_handler(message: types.Message):
 
     seller_info = await get_seller_by_telegram(user_id)
     if not seller_info:
-        await message.answer("❌ Sotuvchi ma'lumotlari topilmadi. Iltimos, admin bilan bog'laning.")
+        await message.answer(
+            "❌ Sotuvchi ma'lumotlari topilmadi.\n\n"
+            "Iltimos, avval /link_seller <Sotuvchi nomi> buyrug'i orqali o'zingizni ro'yxatdan o'tkazing."
+        )
         return
 
     seller_name = seller_info.get("seller_name") or "Unknown"
@@ -85,7 +88,7 @@ async def myleads_handler(message: types.Message):
 
 
 async def pending_handler(message: types.Message):
-    """Handle /pending command - show pending tasks."""
+    """Handle /pending command or 'Kutilayotgan Vazifalar' button - show pending tasks."""
     user_id = message.from_user.id
 
     if not await is_seller(user_id):
@@ -94,7 +97,10 @@ async def pending_handler(message: types.Message):
 
     seller_info = await get_seller_by_telegram(user_id)
     if not seller_info:
-        await message.answer("❌ Sotuvchi ma'lumotlari topilmadi. Iltimos, admin bilan bog'laning.")
+        await message.answer(
+            "❌ Sotuvchi ma'lumotlari topilmadi.\n\n"
+            "Iltimos, avval /link_seller <Sotuvchi nomi> buyrug'i orqali o'zingizni ro'yxatdan o'tkazing."
+        )
         return
 
     seller_name = seller_info.get("seller_name") or "Unknown"
@@ -149,7 +155,7 @@ async def pending_handler(message: types.Message):
 
 
 async def update_status_handler(message: types.Message):
-    """Handle /update_status command - show status update interface."""
+    """Handle /update_status command or 'Holatni Yangilash' button - show status update interface."""
     user_id = message.from_user.id
 
     if not await is_seller(user_id):
@@ -158,7 +164,10 @@ async def update_status_handler(message: types.Message):
 
     seller_info = await get_seller_by_telegram(user_id)
     if not seller_info:
-        await message.answer("❌ Sotuvchi ma'lumotlari topilmadi. Iltimos, admin bilan bog'laning.")
+        await message.answer(
+            "❌ Sotuvchi ma'lumotlari topilmadi.\n\n"
+            "Iltimos, avval /link_seller <Sotuvchi nomi> buyrug'i orqali o'zingizni ro'yxatdan o'tkazing."
+        )
         return
 
     seller_name = seller_info.get("seller_name") or "Unknown"
@@ -296,6 +305,7 @@ async def set_status_handler(callback: types.CallbackQuery):
 
 
 async def followup_handler(message: types.Message):
+    """Handle /followup command or 'Qayta Aloqa' button - schedule follow-up."""
     """Handle /followup command to schedule follow-up."""
     user_id = message.from_user.id
 
@@ -389,7 +399,7 @@ async def link_seller_handler(message: types.Message):
 
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer("Foydalanish: /link_seller Sotuvchi nomi")
+        await message.answer("ℹ️ Foydalanish: /link_seller <Sotuvchi nomi>\n\nMasalan: /link_seller Ahmad")
         return
 
     seller_name = parts[1].strip()
@@ -397,10 +407,50 @@ async def link_seller_handler(message: types.Message):
         await message.answer("❌ Sotuvchi nomini kiriting.")
         return
 
+    # Check if seller exists
     seller_record = await get_seller_by_name(seller_name)
     if not seller_record:
-        await message.answer("❌ Bunday sotuvchi topilmadi. Admin /add_seller bilan qo'shishi kerak.")
+        await message.answer(
+            f"❌ '{seller_name}' nomli sotuvchi topilmadi.\n\n"
+            "Iltimos, admin bilan bog'laning yoki admin /add_seller buyrug'i orqali sizni qo'shishi kerak."
+        )
         return
 
-    await link_seller_to_telegram(seller_name, user_id)
-    await message.answer(f"✅ {seller_name} profili Telegram hisobingizga bog'landi.")
+    # Check if this telegram_id is already linked to another seller
+    existing_seller = await get_seller_by_telegram(user_id)
+    if existing_seller and existing_seller.get("seller_name", "").lower() != seller_name.lower():
+        await message.answer(
+            f"⚠️ Sizning Telegram hisobingiz allaqachon '{existing_seller.get('seller_name')}' "
+            f"nomli sotuvchiga bog'langan.\n\n"
+            f"Yangi sotuvchiga bog'lash uchun admin bilan bog'laning."
+        )
+        return
+
+    # Link seller to telegram
+    success = await link_seller_to_telegram(seller_name, user_id)
+    if success:
+        # Verify the link worked
+        linked_seller = await get_seller_by_telegram(user_id)
+        if linked_seller:
+            # Check how many leads this seller has
+            from google_sheets import sheets_client
+            leads = await sheets_client.get_leads_by_seller(seller_name)
+            
+            message_text = (
+                f"✅ <b>Muvaffaqiyatli bog'landi!</b>\n\n"
+                f"Sotuvchi: <b>{seller_name}</b>\n"
+                f"Telegram ID: {user_id}\n\n"
+            )
+            
+            if leads:
+                message_text += f"📋 Sizga {len(leads)} ta lid tayinlangan.\n"
+                message_text += "Endi /myleads buyrug'i orqali lidingizni ko'rishingiz mumkin."
+            else:
+                message_text += "📋 Hozircha sizga tayinlangan lidlar yo'q."
+            
+            await message.answer(message_text)
+            logger.info(f"Seller {seller_name} linked to Telegram ID {user_id}")
+        else:
+            await message.answer("❌ Bog'lanishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring.")
+    else:
+        await message.answer("❌ Bog'lanishda xatolik yuz berdi. Iltimos, admin bilan bog'laning.")

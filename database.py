@@ -88,7 +88,14 @@ async def get_user_role(telegram_id: int) -> Optional[str]:
 
 
 async def is_admin(telegram_id: int) -> bool:
-    """Check if user is admin."""
+    """Check if user is admin - checks both database role and ADMIN_IDS from config."""
+    from config import ADMIN_IDS
+    
+    # First check if user is in ADMIN_IDS from environment
+    if telegram_id in ADMIN_IDS:
+        return True
+    
+    # Then check database role
     role = await get_user_role(telegram_id)
     return role == "admin"
 
@@ -168,20 +175,21 @@ async def add_seller_record(seller_name: str, telegram_id: Optional[int] = None,
         await db.commit()
 
 
-async def link_seller_to_telegram(seller_name: str, telegram_id: int):
-    """Attach a Telegram user to an existing seller."""
+async def link_seller_to_telegram(seller_name: str, telegram_id: int) -> bool:
+    """Attach a Telegram user to an existing seller. Returns True if successful."""
     from utils.time_utils import now_utc, format_datetime
 
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        await db.execute(
+        cursor = await db.execute(
             """
             UPDATE sellers
             SET telegram_id = ?, updated_at = ?, is_active = 1
             WHERE LOWER(seller_name) = LOWER(?)
             """,
-            (telegram_id, format_datetime(now_utc()), seller_name),
+            (telegram_id, format_datetime(now_utc()), seller_name.strip()),
         )
         await db.commit()
+        return cursor.rowcount > 0
 
 
 async def deactivate_seller(seller_name: str):
@@ -200,12 +208,37 @@ async def deactivate_seller(seller_name: str):
 
 
 async def get_all_admins() -> List[Dict]:
-    """Get all admins from database."""
+    """Get all admins from database and include ADMIN_IDS from config."""
+    from config import ADMIN_IDS
+    from utils.time_utils import now_utc, format_datetime
+    
+    admins = []
+    admin_ids_seen = set()
+    
+    # Get admins from database
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM users WHERE role = 'admin'") as cursor:
             rows = await cursor.fetchall()
-            return [dict(row) for row in rows]
+            for row in rows:
+                admin_dict = dict(row)
+                admins.append(admin_dict)
+                admin_ids_seen.add(admin_dict["telegram_id"])
+    
+    # Add admins from ADMIN_IDS config that aren't in database
+    for admin_id in ADMIN_IDS:
+        if admin_id not in admin_ids_seen:
+            # Create a minimal admin dict for env admins
+            admins.append({
+                "telegram_id": admin_id,
+                "username": None,
+                "full_name": None,
+                "role": "admin",
+                "created_at": format_datetime(now_utc()),
+                "updated_at": format_datetime(now_utc())
+            })
+    
+    return admins
 
 
 async def mark_reminder_sent(lead_id: str, reminder_type: str, scheduled_time: str) -> bool:

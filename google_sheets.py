@@ -126,13 +126,35 @@ class GoogleSheetsClient:
         return None
 
     async def get_leads_by_seller(self, seller_name: str) -> List[Dict]:
-        """Get all leads for a specific seller."""
+        """
+        Get all leads for a specific seller.
+        Matches by exact case-insensitive comparison of seller name.
+        """
+        if not seller_name or not seller_name.strip():
+            logger.warning("Empty seller_name provided to get_leads_by_seller")
+            return []
+        
         leads = await self.get_all_leads()
-        return [
-            lead
-            for lead in leads
-            if lead.get("Seller", "").strip().lower() == seller_name.strip().lower()
-        ]
+        seller_name_clean = seller_name.strip().lower()
+        
+        matched_leads = []
+        for lead in leads:
+            lead_seller = lead.get("Seller", "").strip()
+            if lead_seller.lower() == seller_name_clean:
+                matched_leads.append(lead)
+        
+        logger.debug(f"Found {len(matched_leads)} leads for seller '{seller_name}'")
+        return matched_leads
+    
+    async def get_leads_by_seller_with_status(self, seller_name: str, status: Optional[str] = None) -> List[Dict]:
+        """
+        Get leads for a seller, optionally filtered by status.
+        """
+        leads = await self.get_leads_by_seller(seller_name)
+        if status:
+            status_clean = status.strip()
+            leads = [lead for lead in leads if lead.get("Status", "").strip() == status_clean]
+        return leads
 
     async def update_lead(self, lead_id: str, updates: Dict[str, str]) -> bool:
         """
