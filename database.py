@@ -131,10 +131,15 @@ async def get_all_sellers() -> List[Dict]:
 
 
 async def get_seller_by_name(seller_name: str) -> Optional[Dict]:
+    """Get seller by name (case-insensitive, trimmed)."""
+    if not seller_name or not seller_name.strip():
+        return None
+    
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT * FROM sellers WHERE LOWER(seller_name) = LOWER(?)", (seller_name,)
+            "SELECT * FROM sellers WHERE LOWER(TRIM(seller_name)) = LOWER(TRIM(?))", 
+            (seller_name.strip(),)
         ) as cursor:
             row = await cursor.fetchone()
             return dict(row) if row else None
