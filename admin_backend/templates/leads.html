@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}Leads Management - Lead Manager Admin{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-3xl font-bold text-gray-800">
+            <i class="fas fa-address-book"></i> Leads Management
+        </h1>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <input type="text" id="searchInput" placeholder="Search by name/phone/ID..."
+                class="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <select id="statusFilter" class="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">All Statuses</option>
+                <option value="New Lead">New Lead</option>
+                <option value="Call #1 Needed">Call #1 Needed</option>
+                <option value="Call #1 Done">Call #1 Done</option>
+                <option value="Call #2 Needed">Call #2 Needed</option>
+                <option value="Call #2 Done">Call #2 Done</option>
+                <option value="Call #3 Needed">Call #3 Needed</option>
+                <option value="Call #3 Done">Call #3 Done</option>
+                <option value="Follow-up Needed">Follow-up Needed</option>
+                <option value="Follow-up Done">Follow-up Done</option>
+                <option value="First Class Scheduled">First Class Scheduled</option>
+                <option value="First Class Confirmed">First Class Confirmed</option>
+                <option value="No Answer">No Answer</option>
+                <option value="Cold Lead">Cold Lead</option>
+                <option value="Lost Lead">Lost Lead</option>
+            </select>
+            <select id="sellerFilter" class="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">All Sellers</option>
+            </select>
+            <select id="sourceFilter" class="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">All Sources</option>
+            </select>
+            <select id="sortBy" class="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="seller">By Seller</option>
+                <option value="status">By Status</option>
+            </select>
+        </div>
+        <button onclick="applyFilters()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+            <i class="fas fa-filter"></i> Apply Filters
+        </button>
+    </div>
+
+    <!-- Leads Table -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Seller</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="leadsTable" class="bg-white divide-y divide-gray-200">
+                    <tr>
+                        <td colspan="8" class="px-6 py-4 text-center text-gray-500">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="px-6 py-4 bg-gray-50">
+            <p class="text-sm text-gray-600">Total: <span id="totalLeads">0</span> leads</p>
+        </div>
+    </div>
+</div>
+
+<!-- Lead Detail Modal -->
+<div id="leadModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">Lead Details</h3>
+            <div id="leadDetails" class="space-y-4">
+                <!-- Details will be loaded here -->
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeLeadModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadLeads() {
+    const search = document.getElementById('searchInput').value;
+    const status = document.getElementById('statusFilter').value;
+    const seller = document.getElementById('sellerFilter').value;
+    const source = document.getElementById('sourceFilter').value;
+    const sortBy = document.getElementById('sortBy').value;
+
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (status) params.append('status', status);
+    if (seller) params.append('seller', seller);
+    if (source) params.append('source', source);
+    if (sortBy) params.append('sort_by', sortBy);
+
+    try {
+        const response = await apiCall(`/admin/api/leads?${params.toString()}`);
+        if (!response) return;
+        const data = await response.json();
+
+        const tbody = document.getElementById('leadsTable');
+        document.getElementById('totalLeads').textContent = data.total || 0;
+
+        if (data.leads.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">No leads found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.leads.map(lead => `
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${lead.ID || '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${lead.Name || '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${lead.Phone || '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${lead.Seller || 'Unassigned'}</td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        ${lead.Status || 'Unknown'}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${lead.Lead_Source || '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${lead.Created_At ? lead.Created_At.split('T')[0] : '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button onclick="viewLead('${lead.ID}')" class="text-blue-600 hover:text-blue-900">
+                        <i class="fas fa-eye"></i> View
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading leads:', error);
+    }
+}
+
+async function loadFilters() {
+    // Load sellers and sources for filters
+    try {
+        const agentsResponse = await apiCall('/admin/api/agents');
+        if (agentsResponse) {
+            const agentsData = await agentsResponse.json();
+            const sellerSelect = document.getElementById('sellerFilter');
+            agentsData.agents.forEach(agent => {
+                const option = document.createElement('option');
+                option.value = agent.name;
+                option.textContent = agent.name;
+                sellerSelect.appendChild(option);
+            });
+        }
+
+        const leadsResponse = await apiCall('/admin/api/leads');
+        if (leadsResponse) {
+            const leadsData = await leadsResponse.json();
+            const sources = [...new Set(leadsData.leads.map(l => l.Lead_Source).filter(Boolean))];
+            const sourceSelect = document.getElementById('sourceFilter');
+            sources.forEach(source => {
+                const option = document.createElement('option');
+                option.value = source;
+                option.textContent = source;
+                sourceSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading filters:', error);
+    }
+}
+
+function applyFilters() {
+    loadLeads();
+}
+
+async function viewLead(leadId) {
+    try {
+        const response = await apiCall(`/admin/api/leads/${leadId}`);
+        if (!response) return;
+        const data = await response.json();
+        const lead = data.lead;
+
+        const details = `
+            <div class="grid grid-cols-2 gap-4">
+                <div><strong>ID:</strong> ${lead.ID || '-'}</div>
+                <div><strong>Name:</strong> ${lead.Name || '-'}</div>
+                <div><strong>Phone:</strong> ${lead.Phone || '-'}</div>
+                <div><strong>Seller:</strong> ${lead.Seller || 'Unassigned'}</div>
+                <div><strong>Status:</strong> ${lead.Status || '-'}</div>
+                <div><strong>Source:</strong> ${lead.Lead_Source || '-'}</div>
+                <div><strong>Created:</strong> ${lead.Created_At || '-'}</div>
+                <div><strong>Last Update:</strong> ${lead.Last_Update || '-'}</div>
+                <div><strong>Call #1 Time:</strong> ${lead.Call_1_Time || '-'}</div>
+                <div><strong>Call #2 Time:</strong> ${lead.Call_2_Time || '-'}</div>
+                <div><strong>Call #3 Time:</strong> ${lead.Call_3_Time || '-'}</div>
+                <div><strong>Next Follow-up:</strong> ${lead.Next_Followup || '-'}</div>
+                <div><strong>First Class Date:</strong> ${lead.First_Class_Date || '-'}</div>
+                <div><strong>First Class Confirm:</strong> ${lead.First_Class_Confirm || '-'}</div>
+            </div>
+            <div class="mt-4">
+                <strong>Comment:</strong>
+                <p class="mt-2 p-3 bg-gray-100 rounded">${lead.Comment || 'No comments'}</p>
+            </div>
+        `;
+
+        document.getElementById('leadDetails').innerHTML = details;
+        document.getElementById('leadModal').classList.remove('hidden');
+    } catch (error) {
+        console.error('Error loading lead details:', error);
+    }
+}
+
+function closeLeadModal() {
+    document.getElementById('leadModal').classList.add('hidden');
+}
+
+// Search on Enter
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') applyFilters();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadFilters();
+    loadLeads();
+});
+</script>
+{% endblock %}
+

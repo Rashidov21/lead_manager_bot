@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}KPI Reports - Lead Manager Admin{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-3xl font-bold text-gray-800">
+            <i class="fas fa-chart-bar"></i> KPI Reports
+        </h1>
+        <div class="space-x-2">
+            <button onclick="exportKPI('csv')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+                <i class="fas fa-file-csv"></i> Export CSV
+            </button>
+            <button onclick="exportKPI('excel')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                <i class="fas fa-file-excel"></i> Export Excel
+            </button>
+            <button onclick="exportKPI('pdf')" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">
+                <i class="fas fa-file-pdf"></i> Export PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Table -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Seller</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Leads</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Call #1 %</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Call #2 %</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Call #3 %</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Follow-ups</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">First Lessons</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attendance %</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lead→Lesson %</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lesson→Sale %</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lead→Sale %</th>
+                    </tr>
+                </thead>
+                <tbody id="kpiTable" class="bg-white divide-y divide-gray-200">
+                    <tr>
+                        <td colspan="11" class="px-6 py-4 text-center text-gray-500">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadKPI() {
+    try {
+        const response = await apiCall('/admin/api/kpi/sellers');
+        if (!response) return;
+        const data = await response.json();
+
+        const tbody = document.getElementById('kpiTable');
+        if (!data.stats || Object.keys(data.stats).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" class="px-6 py-4 text-center text-gray-500">No KPI data available</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = Object.entries(data.stats).map(([seller, stats]) => `
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${seller}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${stats.total_leads || 0}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(stats.call1_completion_rate || 0).toFixed(1)}%</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(stats.call2_completion_rate || 0).toFixed(1)}%</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(stats.call3_completion_rate || 0).toFixed(1)}%</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${stats.followups_completed || 0}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${stats.first_lessons_scheduled || 0}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(stats.attendance_rate || 0).toFixed(1)}%</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(stats.lead_to_first_lesson_rate || 0).toFixed(1)}%</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(stats.first_lesson_to_sale_rate || 0).toFixed(1)}%</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(stats.lead_to_sale_rate || 0).toFixed(1)}%</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading KPI:', error);
+    }
+}
+
+async function exportKPI(format) {
+    try {
+        const response = await apiCall(`/admin/api/kpi/export?format=${format}`);
+        if (!response) return;
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `kpi_report.${format === 'excel' ? 'xlsx' : format}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (error) {
+        console.error('Error exporting KPI:', error);
+        alert('Error exporting KPI data');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadKPI);
+</script>
+{% endblock %}
+

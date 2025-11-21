@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Lead Manager Admin{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-3xl font-bold text-gray-800">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </h1>
+        <button onclick="refreshDashboard()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4" id="statsCards">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 text-sm">Total Leads</p>
+                    <p class="text-3xl font-bold text-gray-800" id="totalLeads">-</p>
+                </div>
+                <i class="fas fa-users text-4xl text-blue-500"></i>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 text-sm">New Leads Today</p>
+                    <p class="text-3xl font-bold text-gray-800" id="newLeadsToday">-</p>
+                </div>
+                <i class="fas fa-user-plus text-4xl text-green-500"></i>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 text-sm">Calls Today</p>
+                    <p class="text-3xl font-bold text-gray-800" id="callsToday">-</p>
+                </div>
+                <i class="fas fa-phone text-4xl text-yellow-500"></i>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 text-sm">First Class Scheduled</p>
+                    <p class="text-3xl font-bold text-gray-800" id="firstClassScheduled">-</p>
+                </div>
+                <i class="fas fa-calendar-check text-4xl text-purple-500"></i>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 text-sm">First Class Confirmed</p>
+                    <p class="text-3xl font-bold text-gray-800" id="firstClassConfirmed">-</p>
+                </div>
+                <i class="fas fa-check-circle text-4xl text-indigo-500"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Leads by Source -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-chart-pie"></i> Leads by Source
+            </h2>
+            <canvas id="sourceChart" height="300"></canvas>
+        </div>
+
+        <!-- Leads per Agent -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-chart-bar"></i> Leads per Sales Agent
+            </h2>
+            <canvas id="agentChart" height="300"></canvas>
+        </div>
+    </div>
+
+    <!-- Activity Chart -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-chart-line"></i> 7-Day Activity
+        </h2>
+        <canvas id="activityChart" height="100"></canvas>
+    </div>
+
+    <!-- Conversion Funnel -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-funnel-dollar"></i> Conversion Funnel
+        </h2>
+        <div id="funnelChart" class="mt-4">
+            <!-- Funnel will be rendered here -->
+        </div>
+    </div>
+</div>
+
+<script>
+let sourceChart, agentChart, activityChart;
+
+async function loadDashboard() {
+    try {
+        const response = await apiCall('/admin/api/dashboard/stats');
+        if (!response) return;
+        const data = await response.json();
+
+        // Update stats cards
+        document.getElementById('totalLeads').textContent = data.total_leads || 0;
+        document.getElementById('newLeadsToday').textContent = data.new_leads_today || 0;
+        document.getElementById('callsToday').textContent = data.calls_today || 0;
+        document.getElementById('firstClassScheduled').textContent = data.first_class_scheduled || 0;
+        document.getElementById('firstClassConfirmed').textContent = data.first_class_confirmed || 0;
+
+        // Load chart data
+        const chartResponse = await apiCall('/admin/api/stats/charts?period=week');
+        if (chartResponse) {
+            const chartData = await chartResponse.json();
+            updateCharts(chartData);
+        }
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+    }
+}
+
+function updateCharts(data) {
+    // Source Chart (Pie)
+    const sourceCtx = document.getElementById('sourceChart').getContext('2d');
+    if (sourceChart) sourceChart.destroy();
+    sourceChart = new Chart(sourceCtx, {
+        type: 'pie',
+        data: {
+            labels: data.sources.labels,
+            datasets: [{
+                data: data.sources.data,
+                backgroundColor: [
+                    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true
+        }
+    });
+
+    // Agent Chart (Bar)
+    const agentCtx = document.getElementById('agentChart').getContext('2d');
+    if (agentChart) agentChart.destroy();
+    agentChart = new Chart(agentCtx, {
+        type: 'bar',
+        data: {
+            labels: data.agents.labels,
+            datasets: [{
+                label: 'Leads',
+                data: data.agents.data,
+                backgroundColor: '#3B82F6'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // Activity Chart (Line)
+    const activityCtx = document.getElementById('activityChart').getContext('2d');
+    if (activityChart) activityChart.destroy();
+    activityChart = new Chart(activityCtx, {
+        type: 'line',
+        data: {
+            labels: data.activity.labels,
+            datasets: [
+                {
+                    label: 'Calls',
+                    data: data.activity.calls,
+                    borderColor: '#3B82F6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)'
+                },
+                {
+                    label: 'Follow-ups',
+                    data: data.activity.followups,
+                    borderColor: '#10B981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)'
+                },
+                {
+                    label: 'Sales',
+                    data: data.activity.sales,
+                    borderColor: '#F59E0B',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+function refreshDashboard() {
+    loadDashboard();
+}
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', loadDashboard);
+
+// Auto-refresh every 30 seconds
+setInterval(loadDashboard, 30000);
+</script>
+{% endblock %}
+

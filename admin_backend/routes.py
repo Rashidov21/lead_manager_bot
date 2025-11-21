@@ -49,24 +49,28 @@ async def login_page(request: Request):
 
 @auth_router.post("/login")
 async def login(
+    request: Request,
     email: str = Form(...),
-    password: str = Form(...),
-    request: Request = None
+    password: str = Form(...)
 ):
     """Authenticate admin user."""
     user = await auth.authenticate_admin(email, password)
     if not user:
-        if request:
-            return templates.TemplateResponse(
-                "login.html",
-                {"request": request, "error": "Invalid email or password"}
-            )
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Invalid email or password"}
+        )
     
     access_token = auth.create_access_token(data={"sub": user["email"]})
     
     response = RedirectResponse(url="/admin/dashboard", status_code=303)
-    response.set_cookie(key="access_token", value=access_token, httponly=True, max_age=28800)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=28800,
+        samesite="lax"
+    )
     return response
 
 
@@ -83,7 +87,12 @@ async def logout():
 @dashboard_router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(request: Request, current_admin: dict = Depends(auth.get_current_admin)):
     """Dashboard page."""
-    return templates.TemplateResponse("dashboard.html", {"request": request, "admin": current_admin})
+    try:
+        return templates.TemplateResponse("dashboard.html", {"request": request, "admin": current_admin})
+    except HTTPException as e:
+        if e.status_code == 401:
+            return RedirectResponse(url="/admin/login", status_code=303)
+        raise
 
 
 @dashboard_router.get("/api/dashboard/stats")
